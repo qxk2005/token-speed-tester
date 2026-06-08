@@ -1,0 +1,14 @@
+# Token Speed Tester 配置文件模版
+# 复制此文件为 config.yaml 并填入您真实的 API 配置
+
+# API 服务商：openai 或 anthropic
+provider: "openai"
+
+# 您的 API Key
+apiKey: "YOUR_API_KEY"
+
+# API 接口端点 (OpenAI 兼容端点通常以 /v1 结尾)
+baseURL: "https://api.openai.com/v1"
+
+# 测试使用的模型名称
+model: "gpt-4o"

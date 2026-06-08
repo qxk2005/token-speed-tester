@@ -789,6 +789,17 @@
         terminalScreen.scrollTop = terminalScreen.scrollHeight;
       }
     }
+
+    // 在页面加载后从本地 config.yaml（如果有的话）自动填充表单
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.LOCAL_CONFIG) {
+        const c = window.LOCAL_CONFIG;
+        if (c.provider) document.getElementById('provider').value = c.provider;
+        if (c.apiKey) document.getElementById('apiKey').value = c.apiKey;
+        if (c.baseURL) document.getElementById('baseURL').value = c.baseURL;
+        if (c.model) document.getElementById('model').value = c.model;
+      }
+    });
   </script>
 </body>
 </html>

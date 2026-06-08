@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -10,6 +10,31 @@ import { createTokenizer } from "./tokenizer.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// 简易的 yaml 解析器
+function parseLocalYaml(): Record<string, string> {
+  const yamlPath = join(__dirname, "..", "config.yaml");
+  if (!existsSync(yamlPath)) return {};
+  try {
+    const content = readFileSync(yamlPath, "utf-8");
+    const config: Record<string, string> = {};
+    const lines = content.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const colonIdx = trimmed.indexOf(":");
+      if (colonIdx !== -1) {
+        const key = trimmed.slice(0, colonIdx).trim();
+        const value = trimmed.slice(colonIdx + 1).trim();
+        config[key] = value.replace(/^['"]|['"]$/g, ""); // 移除可能包围的引号
+      }
+    }
+    return config;
+  }
+  catch {
+    return {};
+  }
+}
 
 // 原生的 SSE 协议推送辅助函数
 function sendSSE(res: any, data: any) {
@@ -168,7 +193,12 @@ const server = createServer(async (req, res) => {
     if (req.url === "/" || req.url === "/index.html") {
       try {
         const filePath = join(__dirname, "public", "index.html");
-        const html = await fs.readFile(filePath, "utf-8");
+        let html = await fs.readFile(filePath, "utf-8");
+
+        const localConfig = parseLocalYaml();
+        const injectScript = `<script>window.LOCAL_CONFIG = ${JSON.stringify(localConfig)};</script>`;
+        html = html.replace("<head>", `<head>\n  ${injectScript}`);
+
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(html);
         return;

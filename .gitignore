@@ -37,3 +37,6 @@ coverage/
 # HTML report output
 *.html
 !src/**/*.html
+
+# Local configuration
+config.yaml
