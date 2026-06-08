@@ -93,14 +93,22 @@ async function runStreamTest(
 
         if (newTokens > 0) {
           const currentTime = performance.now();
+          const currentRelTime = currentTime - startTime;
 
           if (!firstTokenRecorded) {
-            ttft = currentTime - startTime;
+            ttft = currentRelTime;
             firstTokenRecorded = true;
+            for (let i = 0; i < newTokens; i++) {
+              tokenTimes.push(currentRelTime);
+            }
           }
-
-          for (let i = 0; i < newTokens; i++) {
-            tokenTimes.push(currentTime - startTime);
+          else {
+            const lastTime = tokenTimes.length > 0 ? tokenTimes[tokenTimes.length - 1] : 0;
+            const timeDiff = currentRelTime - lastTime;
+            const step = timeDiff / newTokens;
+            for (let i = 0; i < newTokens; i++) {
+              tokenTimes.push(lastTime + step * (i + 1));
+            }
           }
 
           tokenCount += newTokens;

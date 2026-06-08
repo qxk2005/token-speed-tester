@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Token Speed Tester - 性能测试面板</title>
+  <!-- 引入 Google Outfit 和 Inter 字体 -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Chart.js 库 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-color: #06060c;
+      --panel-bg: rgba(22, 22, 35, 0.45);
+      --glass-border: rgba(255, 255, 255, 0.06);
+      --text-main: #f3f3f6;
+      --text-muted: #8a8d9f;
+      
+      --accent-cyan: #00f5ff;
+      --accent-pink: #ff00aa;
+      --accent-green: #00ff88;
+      --accent-yellow: #ffcc00;
+      
+      --glow-cyan: rgba(0, 245, 255, 0.25);
+      --glow-pink: rgba(255, 0, 170, 0.25);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(0, 245, 255, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(255, 0, 170, 0.05) 0%, transparent 40%);
+    }
+
+    header {
+      padding: 2.5rem 2rem 1.5rem;
+      text-align: center;
+      position: relative;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-pink));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+      filter: drop-shadow(0 2px 10px rgba(0, 245, 255, 0.1));
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 300;
+      letter-spacing: 0.05em;
+    }
+
+    main {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 0 1.5rem 3rem;
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 玻璃卡片 */
+    .glass-card {
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+
+    .glass-card:hover {
+      border-color: rgba(255, 255, 255, 0.1);
+      box-shadow: 0 12px 40px 0 rgba(0, 245, 255, 0.03);
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #fff;
+    }
+
+    .card-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 16px;
+      background: linear-gradient(to bottom, var(--accent-cyan), var(--accent-pink));
+      border-radius: 2px;
+    }
+
+    /* 表单组件 */
+    .form-group {
+      margin-bottom: 1.1rem;
+      position: relative;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      background: rgba(10, 10, 18, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 0.75rem 0.9rem;
+      color: var(--text-main);
+      font-size: 0.9rem;
+      font-family: inherit;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px var(--glow-cyan);
+      background: rgba(10, 10, 18, 0.8);
+    }
+
+    /* 启动按钮 */
+    .btn-test {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-pink));
+      color: #000;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      padding: 0.9rem;
+      cursor: pointer;
+      margin-top: 1rem;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(255, 0, 170, 0.2);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .btn-test:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 245, 255, 0.4);
+      filter: brightness(1.1);
+    }
+
+    .btn-test:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .btn-test:disabled {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* 右侧布局 */
+    .dashboard {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* 状态卡片 */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .metric-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 1.1rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: var(--card-color, var(--accent-cyan));
+    }
+
+    .metric-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.4rem;
+    }
+
+    .metric-value {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .metric-unit {
+      font-size: 0.85rem;
+      font-weight: 400;
+      color: var(--text-muted);
+      margin-left: 0.2rem;
+    }
+
+    /* 终端样式 */
+    .terminal-container {
+      background: #030307;
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      position: relative;
+    }
+
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 0.5rem;
+    }
+
+    .terminal-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .dot-r { background: #ff5f56; }
+    .dot-y { background: #ffbd2e; }
+    .dot-g { background: #27c93f; }
+
+    .terminal-title {
+      font-size: 0.75rem;
+      font-family: 'Fira Code', monospace;
+      color: var(--text-muted);
+      margin-left: 0.5rem;
+    }
+
+    .terminal-screen {
+      height: 180px;
+      overflow-y: auto;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: #a5a9c0;
+      padding-right: 0.5rem;
+      scroll-behavior: smooth;
+    }
+
+    .terminal-screen::-webkit-scrollbar {
+      width: 4px;
+    }
+    .terminal-screen::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+
+    .terminal-cursor {
+      display: inline-block;
+      width: 7px;
+      height: 15px;
+      background: var(--accent-cyan);
+      animation: blink 0.8s infinite;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 1; }
+    }
+
+    /* 图表容器 */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 320px;
+      width: 100%;
+    }
+
+    /* 测试轮次标记 */
+    .runs-status {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .run-badge {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--glass-border);
+      font-size: 0.75rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .run-badge.active {
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      background: rgba(0, 245, 255, 0.05);
+    }
+
+    .run-badge.done {
+      border-color: var(--accent-green);
+      color: var(--accent-green);
+      background: rgba(0, 255, 136, 0.05);
+    }
+
+    /* 历史对比表 */
+    .stats-table-wrapper {
+      overflow-x: auto;
+      margin-top: 0.5rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      text-align: left;
+    }
+
+    th {
+      color: var(--text-muted);
+      font-weight: 500;
+      padding: 0.6rem 0.8rem;
+      border-bottom: 1px solid var(--glass-border);
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 0.75rem 0.8rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      color: var(--text-main);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .loading-spin {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Token Speed Tester</h1>
+    <p>实时测量 & 分析大语言模型 API 吞吐效率</p>
+  </header>
+
+  <main>
+    <!-- 左边栏：配置参数 -->
+    <div class="glass-card">
+      <div class="card-title">测试配置</div>
+      <form id="configForm">
+        <div class="form-group">
+          <label for="provider">服务商 (Provider)</label>
+          <select id="provider">
+            <option value="openai">OpenAI (或兼容接口)</option>
+            <option value="anthropic">Anthropic Messages</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="apiKey">API 密钥 (API Key)</label>
+          <input type="password" id="apiKey" placeholder="输入 API Key" required value="">
+        </div>
+
+        <div class="form-group">
+          <label for="baseURL">节点端点 (Base URL)</label>
+          <input type="url" id="baseURL" placeholder="https://api.openai.com/v1" value="http://10.97.12.30:17810/v1">
+        </div>
+
+        <div class="form-group">
+          <label for="model">模型名称 (Model)</label>
+          <input type="text" id="model" placeholder="gpt-4o" required value="Gemma-4-26B-A4B">
+        </div>
+
+        <div class="form-group">
+          <label for="maxTokens">最大 Token 数 (Max Tokens)</label>
+          <input type="number" id="maxTokens" value="1024" min="1" max="8192">
+        </div>
+
+        <div class="form-group">
+          <label for="runs">运行次数 (Runs)</label>
+          <input type="number" id="runs" value="3" min="1" max="10">
+        </div>
+
+        <div class="form-group">
+          <label for="prompt">测试提示词 (Prompt)</label>
+          <textarea id="prompt" rows="3">写一篇关于 AI 的短文</textarea>
+        </div>
+
+        <button type="submit" id="btnSubmit" class="btn-test">开始性能测试</button>
+      </form>
+    </div>
+
+    <!-- 右侧栏：实时图表和终端 -->
+    <div class="dashboard">
+      <!-- 汇总卡片 -->
+      <div class="metrics-grid">
+        <div class="metric-card" style="--card-color: var(--accent-cyan)">
+          <div class="metric-label">平均 TTFT (首字延迟)</div>
+          <div class="metric-value" id="metrics-ttft">-<span class="metric-unit">ms</span></div>
+        </div>
+        <div class="metric-card" style="--card-color: var(--accent-pink)">
+          <div class="metric-label">平均 Token 速度</div>
+          <div class="metric-value" id="metrics-speed">-<span class="metric-unit">t/s</span></div>
+        </div>
+        <div class="metric-card" style="--card-color: #aa00ff">
+          <div class="metric-label">平均 ITL (词间延迟)</div>
+          <div class="metric-value" id="metrics-itl">-<span class="metric-unit">ms/t</span></div>
+        </div>
+        <div class="metric-card" style="--card-color: var(--accent-yellow)">
+          <div class="metric-label">平均 RTM (响应时间)</div>
+          <div class="metric-value" id="metrics-rtm">-<span class="metric-unit">s</span></div>
+        </div>
+        <div class="metric-card" style="--card-color: var(--accent-green)">
+          <div class="metric-label">总生成的 Token 数</div>
+          <div class="metric-value" id="metrics-tokens">-<span class="metric-unit">tokens</span></div>
+        </div>
+      </div>
+
+      <!-- 实时流式输出终端 -->
+      <div class="terminal-container">
+        <div class="terminal-header">
+          <span class="terminal-dot dot-r"></span>
+          <span class="terminal-dot dot-y"></span>
+          <span class="terminal-dot dot-g"></span>
+          <span class="terminal-title">MODEL STREAM OUTPUT</span>
+        </div>
+        <div class="runs-status" id="runsStatus">
+          <!-- 动态运行进度 -->
+        </div>
+        <div class="terminal-screen" id="terminalScreen">
+          准备就绪。配置参数后点击“开始性能测试”...<span class="terminal-cursor"></span>
+        </div>
+      </div>
+
+      <!-- 图表区域 -->
+      <div class="glass-card">
+        <div class="card-title">Token 输出速度曲线 (TPS)</div>
+        <div class="charts-row">
+          <div class="chart-container">
+            <canvas id="tpsChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- 报告表格 -->
+      <div class="glass-card">
+        <div class="card-title">详细测试报告统计</div>
+        <div class="stats-table-wrapper">
+          <table id="reportTable">
+            <thead>
+              <tr>
+                <th>测试轮次</th>
+                <th>首字延迟 (TTFT)</th>
+                <th>平均速度 (Avg Speed)</th>
+                <th>峰值速度 (Peak Speed)</th>
+                <th>单秒 TPS 峰值</th>
+                <th>总生成 Tokens</th>
+                <th>耗时</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem 0;">
+                  暂无测试数据，运行性能测试后在此展示统计
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById('configForm');
+    const btnSubmit = document.getElementById('btnSubmit');
+    const terminalScreen = document.getElementById('terminalScreen');
+    const runsStatus = document.getElementById('runsStatus');
+    const reportTableBody = document.querySelector('#reportTable tbody');
+
+    // 图表初始化
+    let tpsChart = null;
+
+    function initChart(runCount) {
+      const ctx = document.getElementById('tpsChart').getContext('2d');
+      if (tpsChart) {
+        tpsChart.destroy();
+      }
+
+      const datasets = [];
+      const colors = ['#00f5ff', '#ff00aa', '#ffcc00', '#00ff88', '#ff6600', '#aa00ff'];
+
+      for (let i = 1; i <= runCount; i++) {
+        datasets.push({
+          label: `运行 ${i}`,
+          borderColor: colors[(i - 1) % colors.length],
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          tension: 0.3,
+          data: [],
+          pointRadius: 3,
+          pointHoverRadius: 6,
+        });
+      }
+
+      tpsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#8a8d9f', font: { family: 'Inter' } }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255, 255, 255, 0.03)' },
+              ticks: { color: '#8a8d9f', font: { family: 'Fira Code', size: 10 } },
+              title: { display: true, text: '时间 (秒)', color: '#8a8d9f' }
+            },
+            y: {
+              grid: { color: 'rgba(255, 255, 255, 0.03)' },
+              ticks: { color: '#8a8d9f', font: { family: 'Fira Code', size: 10 } },
+              title: { display: true, text: 'TPS (Tokens/Sec)', color: '#8a8d9f' }
+            }
+          }
+        }
+      });
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const provider = document.getElementById('provider').value;
+      const apiKey = document.getElementById('apiKey').value;
+      const baseURL = document.getElementById('baseURL').value;
+      const model = document.getElementById('model').value;
+      const maxTokens = parseInt(document.getElementById('maxTokens').value);
+      const runs = parseInt(document.getElementById('runs').value);
+      const prompt = document.getElementById('prompt').value;
+
+      // 重置界面
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = `<span class="loading-spin"></span> 性能测试进行中...`;
+      terminalScreen.innerHTML = '';
+      runsStatus.innerHTML = '';
+      
+      document.getElementById('metrics-ttft').innerHTML = `-<span class="metric-unit">ms</span>`;
+      document.getElementById('metrics-speed').innerHTML = `-<span class="metric-unit">t/s</span>`;
+      document.getElementById('metrics-itl').innerHTML = `-<span class="metric-unit">ms/t</span>`;
+      document.getElementById('metrics-rtm').innerHTML = `-<span class="metric-unit">s</span>`;
+      document.getElementById('metrics-tokens').innerHTML = `-<span class="metric-unit">tokens</span>`;
+      
+      // 初始化图表
+      initChart(runs);
+      
+      for (let i = 1; i <= runs; i++) {
+        const badge = document.createElement('span');
+        badge.id = `badge-run-${i}`;
+        badge.className = 'run-badge';
+        badge.innerHTML = `运行 ${i}`;
+        runsStatus.appendChild(badge);
+      }
+
+      // 初始化表数据
+      reportTableBody.innerHTML = '';
+
+      try {
+        const response = await fetch('/api/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, apiKey, baseURL, model, maxTokens, runs, prompt })
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || '请求失败');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop(); // 最后一项可能不完整
+
+          for (const line of lines) {
+            if (line.trim().startsWith('data: ')) {
+              const jsonStr = line.replace('data: ', '');
+              try {
+                const event = JSON.parse(jsonStr);
+                handleServerEvent(event);
+              } catch (e) {
+                console.error("Failed to parse event JSON", e);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        terminalScreen.innerHTML += `\n<span style="color: var(--accent-pink)">🚨 错误: ${err.message}</span>`;
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '开始性能测试';
+      }
+    });
+
+    function handleServerEvent(event) {
+      if (event.type === 'run_start') {
+        const badge = document.getElementById(`badge-run-${event.run}`);
+        if (badge) {
+          badge.className = 'run-badge active';
+          badge.innerHTML = `<span class="loading-spin"></span> 运行 ${event.run} 中...`;
+        }
+        terminalScreen.innerHTML += `\n\n=== [运行 ${event.run} 流式输出] ===\n`;
+      } 
+      
+      else if (event.type === 'chunk') {
+        terminalScreen.innerText += event.text;
+        terminalScreen.scrollTop = terminalScreen.scrollHeight;
+
+        // 动态将 TPS 点推入图表
+        if (tpsChart) {
+          const runIdx = event.run - 1;
+          const dataset = tpsChart.data.datasets[runIdx];
+          
+          // 预估大致当前秒数，推入点
+          const durationSec = Math.round(dataset.data.length);
+          
+          // 如果图表横坐标 label 不够，递增 label
+          if (tpsChart.data.labels.length <= durationSec) {
+            tpsChart.data.labels.push(`${durationSec}s`);
+          }
+          
+          dataset.data.push(event.tps);
+          tpsChart.update('none'); // 无动画实时更新以获得最高平滑度
+        }
+      } 
+      
+      else if (event.type === 'run_end') {
+        const badge = document.getElementById(`badge-run-${event.run}`);
+        if (badge) {
+          badge.className = 'run-badge done';
+          badge.innerHTML = `✓ 运行 ${event.run} 完成`;
+        }
+
+        // 添加详细结果到表格中
+        const m = event.metrics;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><strong>运行 ${event.run}</strong></td>
+          <td>${m.ttft.toFixed(2)} ms</td>
+          <td>${m.averageSpeed.toFixed(2)} t/s</td>
+          <td>${m.peakSpeed.toFixed(2)} t/s</td>
+          <td>${m.peakTps}</td>
+          <td>${m.totalTokens}</td>
+          <td>${(m.totalTime / 1000).toFixed(2)} s</td>
+        `;
+        reportTableBody.appendChild(row);
+
+        // 如果是多次运行，我们可能需要平滑化该次的图表点为真实的每秒 TPS
+        if (tpsChart) {
+          const runIdx = event.run - 1;
+          const dataset = tpsChart.data.datasets[runIdx];
+          dataset.data = m.tps; // 更新为精准计算得到的 tps 曲线
+          
+          // 重新匹配横坐标 labels 长度
+          const maxLength = Math.max(...tpsChart.data.datasets.map(d => d.data.length));
+          tpsChart.data.labels = Array.from({ length: maxLength }, (_, k) => `${k}s`);
+          tpsChart.update();
+        }
+      } 
+      
+      else if (event.type === 'done') {
+        const stats = event.stats;
+        
+        // 更新卡片上的均值数据
+        const avgSpeed = stats.mean.averageSpeed;
+        const avgItl = avgSpeed > 0 ? (1000 / avgSpeed) : 0;
+        const avgRtm = stats.mean.totalTime / 1000;
+
+        document.getElementById('metrics-ttft').innerHTML = `${stats.mean.ttft.toFixed(2)}<span class="metric-unit">ms</span>`;
+        document.getElementById('metrics-speed').innerHTML = `${stats.mean.averageSpeed.toFixed(2)}<span class="metric-unit">t/s</span>`;
+        document.getElementById('metrics-itl').innerHTML = `${avgItl.toFixed(2)}<span class="metric-unit">ms/t</span>`;
+        document.getElementById('metrics-rtm').innerHTML = `${avgRtm.toFixed(2)}<span class="metric-unit">s</span>`;
+        document.getElementById('metrics-tokens').innerHTML = `${Math.round(stats.mean.totalTokens)}<span class="metric-unit">tokens</span>`;
+
+        // 添加汇总行到表格中
+        const summaryRow = document.createElement('tr');
+        summaryRow.style.background = 'rgba(0, 245, 255, 0.05)';
+        summaryRow.style.borderTop = '2px solid rgba(0, 245, 255, 0.3)';
+        summaryRow.innerHTML = `
+          <td style="color: var(--accent-cyan);"><strong>统计均值</strong></td>
+          <td style="color: var(--accent-cyan); font-weight: bold;">${stats.mean.ttft.toFixed(2)} ms</td>
+          <td style="color: var(--accent-cyan); font-weight: bold;">${stats.mean.averageSpeed.toFixed(2)} t/s</td>
+          <td style="color: var(--accent-cyan); font-weight: bold;">${stats.mean.peakSpeed.toFixed(2)} t/s</td>
+          <td>${stats.mean.peakTps.toFixed(2)}</td>
+          <td>${Math.round(stats.mean.totalTokens)}</td>
+          <td>${(stats.mean.totalTime / 1000).toFixed(2)} s</td>
+        `;
+        reportTableBody.appendChild(summaryRow);
+
+        terminalScreen.innerHTML += `\n\n🎉 测试全部完成！统计平均速度为 ${stats.mean.averageSpeed.toFixed(2)} tokens/s。`;
+        terminalScreen.scrollTop = terminalScreen.scrollHeight;
+      }
+      
+      else if (event.type === 'error') {
+        terminalScreen.innerHTML += `\n<span style="color: var(--accent-pink)">🚨 API 错误: ${event.message}</span>`;
+        terminalScreen.scrollTop = terminalScreen.scrollHeight;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -46,6 +46,7 @@
   "scripts": {
     "build": "tsdown && node scripts/copy-assets.mjs",
     "dev": "tsx src/index.ts",
+    "web": "node scripts/start-web.mjs",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "prepublishOnly": "nr build",
