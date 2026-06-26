@@ -14,7 +14,7 @@ import { generateCSVExport, generateJSONExport } from "./export.js";
 import { generateHTMLReport } from "./html-report.js";
 import { DEFAULT_LANG, getMessages } from "./i18n.js";
 import { calculateMetrics, calculateStats } from "./metrics.js";
-import { restartWebServer, stopWebServer } from "./web-control.js";
+import { startWebServerForeground, stopWebServer } from "./web-control.js";
 
 function getCliVersion(): string {
   try {
@@ -46,7 +46,8 @@ program
   .option("--lang <lang>", "Output language: zh or en", "zh")
   .option("-f, --output-format <format>", "Output format: terminal, json, csv, html", "html")
   .option("-o, --output <path>", "Output file path (default: report.{ext})")
-  .option("--restart", "Restart the WebUI server as a background daemon", false)
+  .option("--start", "Start the WebUI server in foreground (Ctrl+C to exit)", false)
+  .option("--restart", "Restart the WebUI server in foreground (Ctrl+C to exit)", false)
   .option("--stop", "Stop the running WebUI server daemon", false)
   .parse(process.argv);
 
@@ -61,9 +62,9 @@ async function main() {
       return;
     }
 
-    // 重启 WebUI 服务（后台守护进程），不执行速度测试
-    if (options.restart) {
-      await restartWebServer();
+    // 前台启动 WebUI 服务（--start 或 --restart），不执行速度测试
+    if (options.start || options.restart) {
+      await startWebServerForeground();
       return;
     }
 

@@ -227,3 +227,46 @@ export async function restartWebServer(): Promise<void> {
     console.warn(`⚠️ 已发起启动，但未在预期时间内确认健康检查，请查看日志: ${logPath}`);
   }
 }
+
+/**
+ * 在前台启动 WebUI server：stdio 继承父进程终端，日志直接输出到屏幕，
+ * 用户可通过 Ctrl+C 退出。适用于 --start 和 --restart 的前台模式。
+ */
+export async function startWebServerForeground(): Promise<void> {
+  const port = await resolvePort();
+  const { command, args, cwd } = resolveServerRunner();
+
+  console.log(`🚀 WebUI server 启动中，端口: ${port}`);
+  console.log(`ℹ️ 按 Ctrl+C 退出\n`);
+
+  const child = spawn(command, args, {
+    cwd,
+    stdio: "inherit",
+    env: { ...process.env, PORT_OVERRIDE: String(port) },
+  });
+
+  // 将父进程退出信号转发给子进程
+  const forwardInt = () => child.kill("SIGINT");
+  const forwardTerm = () => child.kill("SIGTERM");
+  process.on("SIGINT", forwardInt);
+  process.on("SIGTERM", forwardTerm);
+
+  await new Promise<void>((resolve, reject) => {
+    child.on("exit", (code) => {
+      process.off("SIGINT", forwardInt);
+      process.off("SIGTERM", forwardTerm);
+      // code === null 表示被信号终止（如 Ctrl+C），视为正常退出
+      if (code === null || code === 0) {
+        resolve();
+      }
+      else {
+        reject(new Error(`WebUI server 退出，exit code: ${code}`));
+      }
+    });
+    child.on("error", (err) => {
+      process.off("SIGINT", forwardInt);
+      process.off("SIGTERM", forwardTerm);
+      reject(err);
+    });
+  });
+}
