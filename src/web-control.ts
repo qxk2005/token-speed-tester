@@ -179,6 +179,33 @@ async function waitUntilReady(port: number): Promise<number | null> {
 }
 
 /**
+ * 停止正在运行的 token-speed-tester WebUI server。
+ * 从默认端口 3000 开始依次探测，找到属于我们的进程后终止它。
+ */
+export async function stopWebServer(): Promise<void> {
+  let port = DEFAULT_PORT;
+
+  for (let attempts = 0; attempts < MAX_PORT_ATTEMPTS; attempts++) {
+    const check = await checkPort(port);
+
+    if (check.status === "self") {
+      await stopSelf(port, check.pid);
+      console.log(`✅ WebUI server (PID: ${check.pid}) 已停止。`);
+      return;
+    }
+
+    if (check.status === "free") {
+      break;
+    }
+
+    // occupied by another app — try next port
+    port++;
+  }
+
+  console.log(`ℹ️ 未检测到正在运行的 token-speed-tester WebUI server（端口 ${DEFAULT_PORT}–${DEFAULT_PORT + MAX_PORT_ATTEMPTS - 1}）。`);
+}
+
+/**
  * 重启 WebUI server：停止旧的 token-speed-tester 进程，并以后台守护进程方式
  * 启动新的实例，立即归还终端，日志写入临时目录。
  */

@@ -14,7 +14,7 @@ import { generateCSVExport, generateJSONExport } from "./export.js";
 import { generateHTMLReport } from "./html-report.js";
 import { DEFAULT_LANG, getMessages } from "./i18n.js";
 import { calculateMetrics, calculateStats } from "./metrics.js";
-import { restartWebServer } from "./web-control.js";
+import { restartWebServer, stopWebServer } from "./web-control.js";
 
 function getCliVersion(): string {
   try {
@@ -47,6 +47,7 @@ program
   .option("-f, --output-format <format>", "Output format: terminal, json, csv, html", "html")
   .option("-o, --output <path>", "Output file path (default: report.{ext})")
   .option("--restart", "Restart the WebUI server as a background daemon", false)
+  .option("--stop", "Stop the running WebUI server daemon", false)
   .parse(process.argv);
 
 const options = program.opts();
@@ -54,6 +55,12 @@ const options = program.opts();
 async function main() {
   let messages = getMessages(DEFAULT_LANG);
   try {
+    // 停止 WebUI 服务
+    if (options.stop) {
+      await stopWebServer();
+      return;
+    }
+
     // 重启 WebUI 服务（后台守护进程），不执行速度测试
     if (options.restart) {
       await restartWebServer();
