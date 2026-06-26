@@ -27,6 +27,7 @@ A powerful command-line tool for testing token output speed of LLM APIs. Support
 - **Statistical Analysis**: Mean, P50/P95/P99, min, and max across multiple test runs
 - **ASCII Visualization**: Beautiful terminal-based charts and tables
 - **HTML Report**: Generate interactive HTML reports with SVG charts
+- **WebUI Server**: Built-in WebUI server manageable as a background daemon via `--restart` / `--stop`
 - **Custom Endpoints**: Test third-party APIs compatible with OpenAI/Anthropic protocols
 
 ## Installation
@@ -109,6 +110,42 @@ token-speed-tester \
   --lang en
 ```
 
+### WebUI Server Management
+
+token-speed-tester ships a built-in WebUI server (default port 3000) that provides a browser-accessible interactive testing interface.
+Use `--restart` and `--stop` to manage it as a **background daemon** — the command returns the terminal immediately and requires no API Key.
+
+```bash
+# Start / restart the WebUI server (runs as a background daemon)
+token-speed-tester --restart
+
+# Stop the running WebUI server
+token-speed-tester --stop
+```
+
+**`--restart` behavior:**
+
+1. Probes port 3000 (and subsequent ports) for existing processes
+2. If a previous token-speed-tester process is found, sends `SIGTERM` (falls back to `SIGKILL` on timeout)
+3. Starts a new instance in detached daemon mode on the first available port
+4. Polls `/api/health` until ready, then prints the URL and PID and returns the terminal
+
+**`--stop` behavior:**
+
+1. Scans ports 3000–3009 for a token-speed-tester process
+2. Sends `SIGTERM` (falls back to `SIGKILL` on timeout) to stop it
+3. Prints an info message and exits if no running instance is found
+
+**Log file:** stdout and stderr of the daemon are appended to
+`$TMPDIR/token-speed-tester-web.log` (e.g. `/var/folders/.../token-speed-tester-web.log` on macOS).
+
+```bash
+# Follow the daemon log
+tail -f $TMPDIR/token-speed-tester-web.log
+```
+
+> **Note:** `--restart` and `--stop` manage the WebUI server daemon and are independent of the one-shot speed test (`token-speed-tester --api-key ...`).
+
 ### Local Development
 
 ```bash
@@ -139,6 +176,10 @@ node dist/index.mjs --api-key=sk-ant-xxx
 | `--lang`          |       | Output language: `zh` or `en`                 | `zh`                      |
 | `--output-format` | `-f`  | Output format: `terminal`/`json`/`csv`/`html` | `html`                    |
 | `--output`        | `-o`  | Output file path (default `report.{ext}`)     | `report.{ext}`            |
+| `--restart`       |       | Restart the WebUI server as a background daemon | -                       |
+| `--stop`          |       | Stop the running WebUI server daemon          | -                         |
+
+> `--restart` and `--stop` require no `--api-key` and do not run a speed test.
 
 Note: The default prompt follows the selected language. Use `--lang en` for the English default prompt.
 

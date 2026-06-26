@@ -27,6 +27,7 @@
 - **统计分析**：多次测试运行的均值、P50/P95/P99、最小值和最大值
 - **ASCII 可视化**：精美的终端图表和数据表格
 - **HTML 报告**：生成包含 SVG 图表的交互式 HTML 报告
+- **WebUI 服务**：内置 WebUI server，可通过 `--restart` / `--stop` 管理后台守护进程
 - **自定义端点**：测试兼容 OpenAI/Anthropic 协议的第三方 API
 
 ## 安装
@@ -110,6 +111,42 @@ token-speed-tester \
   --lang en
 ```
 
+### WebUI 服务管理
+
+token-speed-tester 内置一个 WebUI server（默认端口 3000），提供浏览器可访问的交互式测试界面。
+使用 `--restart` 和 `--stop` 可以以**后台守护进程**方式管理该服务，命令执行后立即归还终端，无需 API Key。
+
+```bash
+# 启动 / 重启 WebUI server（以后台守护进程方式运行）
+token-speed-tester --restart
+
+# 停止正在运行的 WebUI server
+token-speed-tester --stop
+```
+
+**`--restart` 行为说明：**
+
+1. 探测端口 3000（及后续端口）是否被占用
+2. 若检测到旧的 token-speed-tester 进程，先发送 `SIGTERM` 终止（超时则 `SIGKILL`）
+3. 在可用端口上以后台守护进程方式启动新实例
+4. 轮询 `/api/health` 确认就绪后，打印访问地址和 PID，立即归还终端
+
+**`--stop` 行为说明：**
+
+1. 扫描端口 3000–3009，找到属于 token-speed-tester 的进程
+2. 发送 `SIGTERM`（超时则 `SIGKILL`）将其停止
+3. 未检测到时打印提示信息并退出
+
+**日志文件：** 守护进程的标准输出和错误均写入
+`$TMPDIR/token-speed-tester-web.log`（macOS 示例：`/var/folders/.../token-speed-tester-web.log`）。
+
+```bash
+# 查看守护进程日志
+tail -f $TMPDIR/token-speed-tester-web.log
+```
+
+> **注意**：`--restart` 和 `--stop` 管理的是 WebUI server 守护进程，与 `token-speed-tester --api-key ...` 的一次性速度测试相互独立。
+
 ### 本地开发
 
 ```bash
@@ -140,6 +177,10 @@ node dist/index.mjs --api-key=sk-ant-xxx
 | `--lang`          |      | 输出语言: `zh` 或 `en`                   | `zh`                   |
 | `--output-format` | `-f` | 输出格式：`terminal`/`json`/`csv`/`html` | `html`                 |
 | `--output`        | `-o` | 输出文件路径（默认 `report.{ext}`）      | `report.{ext}`         |
+| `--restart`       |      | 以后台守护进程方式重启 WebUI server     | -                      |
+| `--stop`          |      | 停止正在运行的 WebUI server 守护进程    | -                      |
+
+> `--restart` 和 `--stop` 无需提供 `--api-key`，不执行速度测试。
 
 ### 默认模型
 
