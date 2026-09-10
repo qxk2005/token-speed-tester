@@ -40,3 +40,8 @@ coverage/
 
 # Local configuration
 config.yaml
+
+# Python / pyenv
+.venv/
+.python-version
+

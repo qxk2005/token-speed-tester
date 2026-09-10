@@ -91,6 +91,7 @@ async function start() {
   const child = spawn("npx", ["tsx", "src/server.ts"], {
     cwd: projectRoot,
     stdio: "inherit",
+    shell: process.platform === "win32",
     env: {
       ...process.env,
       PORT_OVERRIDE: port.toString(),
