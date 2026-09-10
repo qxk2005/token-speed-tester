@@ -314,6 +314,97 @@
       50% { opacity: 1; }
     }
 
+    .terminal-run-header {
+      color: var(--accent-cyan);
+      font-weight: 600;
+      margin: 0.75rem 0 0.25rem;
+      border-bottom: 1px dashed rgba(0, 245, 255, 0.2);
+      padding-bottom: 0.2rem;
+    }
+
+    .terminal-tag-thinking {
+      color: #b0b4c8;
+      font-size: 0.8rem;
+      margin: 0.5rem 0 0.25rem;
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.05);
+      border-left: 3px solid #8e94af;
+      padding: 0.15rem 0.5rem;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .terminal-thinking-content {
+      color: #8a8fa8;
+      font-style: italic;
+      display: block;
+      margin-bottom: 0.4rem;
+      padding-left: 0.5rem;
+      border-left: 1px dashed rgba(255, 255, 255, 0.15);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .terminal-tag-answer {
+      color: var(--accent-green);
+      font-size: 0.8rem;
+      margin: 0.5rem 0 0.25rem;
+      display: inline-block;
+      background: rgba(0, 255, 136, 0.08);
+      border-left: 3px solid var(--accent-green);
+      padding: 0.15rem 0.5rem;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .terminal-answer-content {
+      color: #e2e4ef;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .terminal-diagnostic-box {
+      background: rgba(255, 189, 46, 0.08);
+      border: 1px solid rgba(255, 189, 46, 0.3);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin: 0.75rem 0;
+      font-size: 0.85rem;
+      color: #ffbd2e;
+    }
+
+    .diagnostic-title {
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+      color: #ffd166;
+    }
+
+    .diagnostic-msg {
+      color: #e6e6e6;
+      margin-bottom: 0.5rem;
+    }
+
+    .diagnostic-sample {
+      background: rgba(0, 0, 0, 0.5);
+      padding: 0.5rem;
+      border-radius: 4px;
+      margin: 0.4rem 0;
+      font-size: 0.75rem;
+      color: #a5a9c0;
+      overflow-x: auto;
+      max-height: 120px;
+    }
+
+    .diagnostic-sample pre {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .diagnostic-tips {
+      margin-left: 1.2rem;
+      color: #cfd2e3;
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+
     /* 图表容器 */
     .charts-row {
       display: grid;
@@ -685,18 +776,67 @@
       }
     });
 
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    let currentRunState = { mode: null, span: null };
+
     function handleServerEvent(event) {
       if (event.type === 'run_start') {
+        currentRunState = { mode: null, span: null };
         const badge = document.getElementById(`badge-run-${event.run}`);
         if (badge) {
           badge.className = 'run-badge active';
           badge.innerHTML = `<span class="loading-spin"></span> 运行 ${event.run} 中...`;
         }
-        terminalScreen.innerHTML += `\n\n=== [运行 ${event.run} 流式输出] ===\n`;
+        const runHeader = document.createElement('div');
+        runHeader.className = 'terminal-run-header';
+        runHeader.textContent = `=== [运行 ${event.run} 流式输出] ===`;
+        terminalScreen.appendChild(runHeader);
+        terminalScreen.scrollTop = terminalScreen.scrollHeight;
       } 
       
       else if (event.type === 'chunk') {
-        terminalScreen.innerText += event.text;
+        if (event.isReasoning) {
+          if (currentRunState.mode !== 'reasoning') {
+            currentRunState.mode = 'reasoning';
+            const tag = document.createElement('div');
+            tag.className = 'terminal-tag-thinking';
+            tag.textContent = '💭 [思考过程]';
+            terminalScreen.appendChild(tag);
+
+            currentRunState.span = document.createElement('div');
+            currentRunState.span.className = 'terminal-thinking-content';
+            terminalScreen.appendChild(currentRunState.span);
+          }
+        } else {
+          if (currentRunState.mode !== 'content') {
+            currentRunState.mode = 'content';
+            const tag = document.createElement('div');
+            tag.className = 'terminal-tag-answer';
+            tag.textContent = '💬 [正式回答]';
+            terminalScreen.appendChild(tag);
+
+            currentRunState.span = document.createElement('div');
+            currentRunState.span.className = 'terminal-answer-content';
+            terminalScreen.appendChild(currentRunState.span);
+          }
+        }
+
+        if (!currentRunState.span) {
+          currentRunState.span = document.createElement('div');
+          currentRunState.span.className = event.isReasoning ? 'terminal-thinking-content' : 'terminal-answer-content';
+          terminalScreen.appendChild(currentRunState.span);
+        }
+
+        currentRunState.span.appendChild(document.createTextNode(event.text));
         terminalScreen.scrollTop = terminalScreen.scrollHeight;
 
         // 动态将 TPS 点推入图表
@@ -717,6 +857,24 @@
         }
       } 
       
+      else if (event.type === 'diagnostic') {
+        const diagBox = document.createElement('div');
+        diagBox.className = 'terminal-diagnostic-box';
+        const tips = (event.tips || []).map(t => `<li>${escapeHtml(t)}</li>`).join('');
+        let sampleHtml = '';
+        if (event.samples && event.samples.length > 0) {
+          sampleHtml = `<div class="diagnostic-sample"><strong>接口原始响应片段:</strong><pre>${escapeHtml(event.samples.join('\n'))}</pre></div>`;
+        }
+        diagBox.innerHTML = `
+          <div class="diagnostic-title">⚠️ 诊断提示 (运行 ${event.run})</div>
+          <div class="diagnostic-msg">${escapeHtml(event.message)}</div>
+          ${sampleHtml}
+          <ul class="diagnostic-tips">${tips}</ul>
+        `;
+        terminalScreen.appendChild(diagBox);
+        terminalScreen.scrollTop = terminalScreen.scrollHeight;
+      }
+
       else if (event.type === 'run_end') {
         const badge = document.getElementById(`badge-run-${event.run}`);
         if (badge) {
@@ -780,12 +938,20 @@
         `;
         reportTableBody.appendChild(summaryRow);
 
-        terminalScreen.innerHTML += `\n\n🎉 测试全部完成！统计平均速度为 ${stats.mean.averageSpeed.toFixed(2)} tokens/s。`;
+        const doneMsg = document.createElement('div');
+        doneMsg.style.margin = '0.75rem 0 0.25rem';
+        doneMsg.style.color = 'var(--accent-cyan)';
+        doneMsg.innerHTML = `🎉 <strong>测试全部完成！</strong>统计平均速度为 <strong>${stats.mean.averageSpeed.toFixed(2)} tokens/s</strong>。`;
+        terminalScreen.appendChild(doneMsg);
         terminalScreen.scrollTop = terminalScreen.scrollHeight;
       }
       
       else if (event.type === 'error') {
-        terminalScreen.innerHTML += `\n<span style="color: var(--accent-pink)">🚨 API 错误: ${event.message}</span>`;
+        const errMsg = document.createElement('div');
+        errMsg.style.margin = '0.5rem 0';
+        errMsg.style.color = 'var(--accent-pink)';
+        errMsg.innerHTML = `🚨 <strong>API 错误:</strong> ${escapeHtml(event.message)}`;
+        terminalScreen.appendChild(errMsg);
         terminalScreen.scrollTop = terminalScreen.scrollHeight;
       }
     }

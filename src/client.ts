@@ -35,15 +35,52 @@ class AnthropicStreamProcessor implements StreamProcessor {
     });
 
     for await (const event of stream) {
-      if (
-        event.type === "content_block_delta"
-        && event.delta.type === "text_delta"
-        && event.delta.text
-      ) {
-        yield { text: event.delta.text };
+      if (event.type === "content_block_delta") {
+        const delta = event.delta as unknown as Record<string, unknown>;
+        if (delta.type === "text_delta" && typeof delta.text === "string" && delta.text.length > 0) {
+          yield { text: delta.text };
+        }
+        else if (delta.type === "thinking_delta" && typeof delta.thinking === "string" && delta.thinking.length > 0) {
+          yield { text: delta.thinking };
+        }
       }
     }
   }
+}
+
+export function extractChunkText(choice?: unknown): { text: string; isReasoning: boolean } {
+  if (!choice || typeof choice !== "object") {
+    return { text: "", isReasoning: false };
+  }
+
+  const c = choice as Record<string, unknown>;
+  const delta = (c.delta && typeof c.delta === "object") ? (c.delta as Record<string, unknown>) : undefined;
+
+  if (delta) {
+    if (typeof delta.reasoning_content === "string" && delta.reasoning_content.length > 0) {
+      return { text: delta.reasoning_content, isReasoning: true };
+    }
+    if (typeof delta.reasoning === "string" && delta.reasoning.length > 0) {
+      return { text: delta.reasoning, isReasoning: true };
+    }
+    if (typeof delta.thought === "string" && delta.thought.length > 0) {
+      return { text: delta.thought, isReasoning: true };
+    }
+    if (typeof delta.content === "string" && delta.content.length > 0) {
+      return { text: delta.content, isReasoning: false };
+    }
+  }
+
+  if (typeof c.text === "string" && c.text.length > 0) {
+    return { text: c.text, isReasoning: false };
+  }
+
+  const message = (c.message && typeof c.message === "object") ? (c.message as Record<string, unknown>) : undefined;
+  if (message && typeof message.content === "string" && message.content.length > 0) {
+    return { text: message.content, isReasoning: false };
+  }
+
+  return { text: "", isReasoning: false };
 }
 
 class OpenAIStreamProcessor implements StreamProcessor {
@@ -63,9 +100,9 @@ class OpenAIStreamProcessor implements StreamProcessor {
     });
 
     for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta;
-      if (delta?.content) {
-        yield { text: delta.content };
+      const { text } = extractChunkText(chunk.choices[0]);
+      if (text) {
+        yield { text };
       }
     }
   }

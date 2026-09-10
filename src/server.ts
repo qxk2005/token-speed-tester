@@ -5,6 +5,7 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { extractChunkText } from "./client.js";
 import { calculateMetrics, calculateStats } from "./metrics.js";
 import { createTokenizer } from "./tokenizer.js";
 
@@ -36,13 +37,17 @@ function parseLocalYaml(): Record<string, string> {
   }
 }
 
+interface SSEWriter {
+  write: (chunk: string) => boolean | void;
+}
+
 // 原生的 SSE 协议推送辅助函数
-function sendSSE(res: any, data: any) {
+function sendSSE(res: SSEWriter, data: unknown) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
 async function runSingleWebTest(
-  res: any,
+  res: SSEWriter,
   runIndex: number,
   config: {
     provider: "openai" | "anthropic";
@@ -59,6 +64,7 @@ async function runSingleWebTest(
   let ttft = 0;
   let firstTokenRecorded = false;
   let tokenCount = 0;
+  const sampleChunks: string[] = [];
 
   sendSSE(res, { type: "run_start", run: runIndex });
 
@@ -77,7 +83,16 @@ async function runSingleWebTest(
       });
 
       for await (const chunk of stream) {
-        const text = chunk.choices[0]?.delta?.content || "";
+        if (sampleChunks.length < 3) {
+          try {
+            sampleChunks.push(JSON.stringify(chunk));
+          }
+          catch {
+            // ignore serialization error
+          }
+        }
+
+        const { text, isReasoning } = extractChunkText(chunk.choices[0]);
         if (text) {
           const encoded = tokenizer.encode(text);
           const newTokens = encoded.length;
@@ -105,6 +120,7 @@ async function runSingleWebTest(
             type: "chunk",
             run: runIndex,
             text,
+            isReasoning,
             tps: tokenCount / ((currentTime - startTime) / 1000),
           });
         }
@@ -124,12 +140,31 @@ async function runSingleWebTest(
       });
 
       for await (const event of stream) {
-        if (
-          event.type === "content_block_delta"
-          && event.delta.type === "text_delta"
-          && event.delta.text
-        ) {
-          const text = event.delta.text;
+        if (sampleChunks.length < 3) {
+          try {
+            sampleChunks.push(JSON.stringify(event));
+          }
+          catch {
+            // ignore
+          }
+        }
+
+        let text = "";
+        let isReasoning = false;
+
+        if (event.type === "content_block_delta") {
+          const delta = event.delta as unknown as Record<string, unknown>;
+          if (delta.type === "text_delta" && typeof delta.text === "string") {
+            text = delta.text;
+            isReasoning = false;
+          }
+          else if (delta.type === "thinking_delta" && typeof delta.thinking === "string") {
+            text = delta.thinking;
+            isReasoning = true;
+          }
+        }
+
+        if (text) {
           const encoded = tokenizer.encode(text);
           const newTokens = encoded.length;
           const currentTime = performance.now();
@@ -156,14 +191,30 @@ async function runSingleWebTest(
             type: "chunk",
             run: runIndex,
             text,
+            isReasoning,
             tps: tokenCount / ((currentTime - startTime) / 1000),
           });
         }
       }
     }
+
+    if (tokenCount === 0) {
+      sendSSE(res, {
+        type: "diagnostic",
+        run: runIndex,
+        message: "未从模型流式响应中解析到任何有效 Token 数据（总生成 Tokens 为 0）",
+        samples: sampleChunks.slice(0, 2),
+        tips: [
+          "1. 若使用的是深度思考模型，请确认「最大 Token 数 (Max Tokens)」是否足够大（思考过程可能消耗数百至上千 Token）；",
+          "2. 请检查节点端点（Base URL）是否开启了代理缓冲（未启用无缓冲实时流式传输）；",
+          "3. 请检查该模型或网关是否直接返回了非标准数据格式或报错响应。",
+        ],
+      });
+    }
   }
-  catch (error: any) {
-    throw new Error(`[Run ${runIndex}] ${error.message || error}`);
+  catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`[Run ${runIndex}] ${msg}`);
   }
   finally {
     tokenizer.free();
@@ -252,8 +303,9 @@ const server = createServer(async (req, res) => {
             });
             allRunMetrics.push(calculated);
           }
-          catch (err: any) {
-            sendSSE(res, { type: "error", message: err.message });
+          catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            sendSSE(res, { type: "error", message: msg });
             res.end();
             return;
           }
@@ -264,9 +316,10 @@ const server = createServer(async (req, res) => {
         sendSSE(res, { type: "done", stats });
         res.end();
       }
-      catch (err: any) {
+      catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: err.message }));
+        res.end(JSON.stringify({ error: msg }));
       }
     });
     return;
@@ -284,7 +337,7 @@ function startServer(p: number) {
   });
 }
 
-server.on("error", (err: any) => {
+server.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EADDRINUSE") {
     console.log(`Port ${port} is in use, trying ${port + 1}...`);
     port++;

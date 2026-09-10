@@ -2,6 +2,7 @@ import type { Config } from "../src/config.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   anthropicStreamTest,
+  extractChunkText,
   openaiStreamTest,
   runMultipleTests,
   streamTest,
@@ -168,6 +169,31 @@ describe("client", () => {
       const config: Config = { ...mockConfig, provider: "openai" };
       await expect(openaiStreamTest(config)).rejects.toThrow("OpenAI API error: API Error");
     });
+
+    it("should handle OpenAI reasoning_content tokens", async () => {
+      const OpenAI = (await import("openai")).default;
+      vi.mocked(OpenAI).mockImplementationOnce(
+        () =>
+          ({
+            chat: {
+              completions: {
+                create: vi.fn().mockResolvedValue({
+                  async* [Symbol.asyncIterator]() {
+                    yield { choices: [{ delta: { reasoning_content: "Thinking..." } }] };
+                    yield { choices: [{ delta: { content: "Final answer." } }] };
+                  },
+                }),
+              },
+            },
+          }) as never,
+      );
+
+      const config: Config = { ...mockConfig, provider: "openai" };
+      const result = await openaiStreamTest(config);
+
+      expect(result.totalTokens).toBeGreaterThan(0);
+      expect(result.ttft).toBeGreaterThanOrEqual(0);
+    });
   });
 
   describe("streamTest", () => {
@@ -202,6 +228,46 @@ describe("client", () => {
       const results = await runMultipleTests(config);
 
       expect(results).toHaveLength(1);
+    });
+  });
+
+  describe("extractChunkText", () => {
+    it("should extract content correctly", () => {
+      expect(extractChunkText({ delta: { content: "hello" } })).toEqual({
+        text: "hello",
+        isReasoning: false,
+      });
+    });
+
+    it("should extract reasoning_content and set isReasoning to true", () => {
+      expect(extractChunkText({ delta: { reasoning_content: "thinking steps" } })).toEqual({
+        text: "thinking steps",
+        isReasoning: true,
+      });
+    });
+
+    it("should extract reasoning and thought fields", () => {
+      expect(extractChunkText({ delta: { reasoning: "reasoning" } })).toEqual({
+        text: "reasoning",
+        isReasoning: true,
+      });
+      expect(extractChunkText({ delta: { thought: "deep thought" } })).toEqual({
+        text: "deep thought",
+        isReasoning: true,
+      });
+    });
+
+    it("should extract completions text fallback", () => {
+      expect(extractChunkText({ text: "completion text" })).toEqual({
+        text: "completion text",
+        isReasoning: false,
+      });
+    });
+
+    it("should handle empty or undefined input safely", () => {
+      expect(extractChunkText(undefined)).toEqual({ text: "", isReasoning: false });
+      expect(extractChunkText({})).toEqual({ text: "", isReasoning: false });
+      expect(extractChunkText({ delta: {} })).toEqual({ text: "", isReasoning: false });
     });
   });
 });
