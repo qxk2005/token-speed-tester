@@ -12,7 +12,25 @@ import { createTokenizer } from "./tokenizer.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// 简易的 yaml 解析器
+// 简易的 yaml 序列化与解析器（严格仅存本地，受 .gitignore 保护）
+export function formatYamlConfig(config: Record<string, unknown>): string {
+  const lines: string[] = [
+    "# Token Speed Tester 本地配置文件（此文件受 .gitignore 保护，绝不上载 Git/GitHub）",
+    `# 保存时间: ${new Date().toLocaleString()}`,
+    "",
+  ];
+
+  const allowedKeys = ["provider", "apiKey", "baseURL", "model", "maxTokens", "runs", "prompt"];
+  for (const key of allowedKeys) {
+    if (config[key] !== undefined && config[key] !== null && config[key] !== "") {
+      const val = String(config[key]);
+      lines.push(`${key}: ${JSON.stringify(val)}`);
+    }
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
 function parseLocalYaml(): Record<string, string> {
   const yamlPath = join(__dirname, "..", "config.yaml");
   if (!existsSync(yamlPath)) return {};
@@ -26,8 +44,16 @@ function parseLocalYaml(): Record<string, string> {
       const colonIdx = trimmed.indexOf(":");
       if (colonIdx !== -1) {
         const key = trimmed.slice(0, colonIdx).trim();
-        const value = trimmed.slice(colonIdx + 1).trim();
-        config[key] = value.replace(/^['"]|['"]$/g, ""); // 移除可能包围的引号
+        let value = trimmed.slice(colonIdx + 1).trim();
+        if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+          try {
+            value = JSON.parse(value);
+          }
+          catch {
+            value = value.slice(1, -1);
+          }
+        }
+        config[key] = value;
       }
     }
     return config;
@@ -260,6 +286,56 @@ const server = createServer(async (req, res) => {
         return;
       }
     }
+  }
+
+  // 配置保存接口：仅保存到本地 config.yaml（受 .gitignore 保护）
+  if (req.method === "POST" && req.url === "/api/config") {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+
+    req.on("end", async () => {
+      try {
+        const parsed = JSON.parse(body);
+        if (typeof parsed !== "object" || !parsed) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Invalid JSON body" }));
+          return;
+        }
+
+        const yamlContent = formatYamlConfig(parsed as Record<string, unknown>);
+        const yamlPath = join(__dirname, "..", "config.yaml");
+        await fs.writeFile(yamlPath, yamlContent, "utf-8");
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, message: "配置已成功保存至本地 config.yaml" }));
+      }
+      catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: msg }));
+      }
+    });
+    return;
+  }
+
+  // 配置清除接口：删除本地 config.yaml
+  if (req.method === "DELETE" && req.url === "/api/config") {
+    try {
+      const yamlPath = join(__dirname, "..", "config.yaml");
+      if (existsSync(yamlPath)) {
+        await fs.unlink(yamlPath);
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, message: "本地 config.yaml 已成功删除" }));
+    }
+    catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: msg }));
+    }
+    return;
   }
 
   // 跨域处理与 SSE 接口

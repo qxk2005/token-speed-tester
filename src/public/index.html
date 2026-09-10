@@ -190,6 +190,138 @@
       box-shadow: none;
     }
 
+    /* 本地配置保存交互组件 */
+    .config-actions-container {
+      margin: 1rem 0 0.5rem;
+      padding: 0.85rem;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--text-main);
+      cursor: pointer;
+      text-transform: none;
+      margin-bottom: 0.65rem;
+      user-select: none;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: var(--accent-cyan);
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .btn-config-group {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .btn-config-action {
+      flex: 1;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 0.55rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+
+    .btn-save {
+      background: rgba(0, 245, 255, 0.08);
+      color: var(--accent-cyan);
+      border-color: rgba(0, 245, 255, 0.3);
+    }
+
+    .btn-save:hover {
+      background: rgba(0, 245, 255, 0.18);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(0, 245, 255, 0.25);
+    }
+
+    .btn-clear {
+      background: rgba(255, 0, 170, 0.08);
+      color: #ff5c8a;
+      border-color: rgba(255, 0, 170, 0.25);
+      flex: 0 0 auto;
+    }
+
+    .btn-clear:hover {
+      background: rgba(255, 0, 170, 0.18);
+      border-color: var(--accent-pink);
+      color: #fff;
+    }
+
+    .config-tip-text {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    /* Toast 通知 */
+    .toast-container {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .toast-item {
+      pointer-events: auto;
+      min-width: 260px;
+      max-width: 380px;
+      padding: 0.75rem 1.1rem;
+      background: rgba(14, 14, 24, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--accent-cyan);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(0, 245, 255, 0.25);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      transition: all 0.3s ease;
+    }
+
+    .toast-item.toast-warn {
+      border-color: var(--accent-pink);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 0, 170, 0.25);
+    }
+
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translateY(-16px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
     /* 右侧布局 */
     .dashboard {
       display: flex;
@@ -499,6 +631,7 @@
   </style>
 </head>
 <body>
+  <div class="toast-container" id="toastContainer"></div>
 
   <header>
     <h1>Token Speed Tester</h1>
@@ -546,6 +679,25 @@
         <div class="form-group">
           <label for="prompt">测试提示词 (Prompt)</label>
           <textarea id="prompt" rows="3">写一篇关于 AI 的短文</textarea>
+        </div>
+
+        <!-- 本地配置保存与复用 -->
+        <div class="config-actions-container">
+          <label class="checkbox-label" for="autoRememberConfig">
+            <input type="checkbox" id="autoRememberConfig" checked>
+            <span>自动记住此配置（测试时自动保存）</span>
+          </label>
+          <div class="btn-config-group">
+            <button type="button" id="btnSaveConfig" class="btn-config-action btn-save">
+              💾 保存为默认配置
+            </button>
+            <button type="button" id="btnClearConfig" class="btn-config-action btn-clear" title="清空本地 config.yaml 与浏览器缓存">
+              🗑️ 清除
+            </button>
+          </div>
+          <div class="config-tip-text">
+            🔒 仅保存在本地磁盘（受 .gitignore 保护）与浏览器缓存，不会提交至 Git/GitHub。
+          </div>
         </div>
 
         <button type="submit" id="btnSubmit" class="btn-test">开始性能测试</button>
@@ -640,6 +792,91 @@
     const runsStatus = document.getElementById('runsStatus');
     const reportTableBody = document.querySelector('#reportTable tbody');
 
+    const btnSaveConfig = document.getElementById('btnSaveConfig');
+    const btnClearConfig = document.getElementById('btnClearConfig');
+    const autoRememberConfig = document.getElementById('autoRememberConfig');
+    const toastContainer = document.getElementById('toastContainer');
+
+    function showToast(message, type = 'info') {
+      if (!toastContainer) return;
+      const toast = document.createElement('div');
+      toast.className = `toast-item ${type === 'warn' ? 'toast-warn' : ''}`;
+      toast.innerHTML = `<span>${type === 'warn' ? '⚠️' : '💾'}</span> <span>${escapeHtml(message)}</span>`;
+      toastContainer.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    function getFormData() {
+      return {
+        provider: document.getElementById('provider').value,
+        apiKey: document.getElementById('apiKey').value,
+        baseURL: document.getElementById('baseURL').value,
+        model: document.getElementById('model').value,
+        maxTokens: document.getElementById('maxTokens').value,
+        runs: document.getElementById('runs').value,
+        prompt: document.getElementById('prompt').value,
+      };
+    }
+
+    async function saveConfigLocally(silent = false) {
+      const cfg = getFormData();
+      try {
+        localStorage.setItem('TOKEN_SPEED_TESTER_CONFIG', JSON.stringify(cfg));
+        if (autoRememberConfig) {
+          localStorage.setItem('TOKEN_SPEED_TESTER_AUTO_REMEMBER', autoRememberConfig.checked ? 'true' : 'false');
+        }
+
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cfg),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || '保存失败');
+        }
+
+        if (!silent) {
+          showToast('配置已成功保存至本地 config.yaml 与浏览器缓存！');
+        }
+      } catch (err) {
+        if (!silent) {
+          showToast(`保存本地配置失败: ${err.message}`, 'warn');
+        }
+      }
+    }
+
+    async function clearLocalConfig() {
+      try {
+        localStorage.removeItem('TOKEN_SPEED_TESTER_CONFIG');
+        const res = await fetch('/api/config', { method: 'DELETE' });
+        if (res.ok) {
+          showToast('本地 config.yaml 与浏览器缓存已清空！', 'warn');
+        } else {
+          showToast('本地浏览器缓存已清空', 'warn');
+        }
+      } catch {
+        showToast('本地浏览器缓存已清空', 'warn');
+      }
+    }
+
+    if (btnSaveConfig) {
+      btnSaveConfig.addEventListener('click', () => saveConfigLocally(false));
+    }
+    if (btnClearConfig) {
+      btnClearConfig.addEventListener('click', () => clearLocalConfig());
+    }
+    if (autoRememberConfig) {
+      autoRememberConfig.addEventListener('change', () => {
+        localStorage.setItem('TOKEN_SPEED_TESTER_AUTO_REMEMBER', autoRememberConfig.checked ? 'true' : 'false');
+      });
+    }
+
     // 图表初始化
     let tpsChart = null;
 
@@ -697,6 +934,10 @@
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+
+      if (autoRememberConfig && autoRememberConfig.checked) {
+        saveConfigLocally(true);
+      }
       
       const provider = document.getElementById('provider').value;
       const apiKey = document.getElementById('apiKey').value;
@@ -956,15 +1197,30 @@
       }
     }
 
-    // 在页面加载后从本地 config.yaml（如果有的话）自动填充表单
+    // 在页面加载后从本地 config.yaml 或 localStorage 自动填充全部表单
     window.addEventListener('DOMContentLoaded', () => {
-      if (window.LOCAL_CONFIG) {
-        const c = window.LOCAL_CONFIG;
-        if (c.provider) document.getElementById('provider').value = c.provider;
-        if (c.apiKey) document.getElementById('apiKey').value = c.apiKey;
-        if (c.baseURL) document.getElementById('baseURL').value = c.baseURL;
-        if (c.model) document.getElementById('model').value = c.model;
+      let localCached = {};
+      try {
+        const raw = localStorage.getItem('TOKEN_SPEED_TESTER_CONFIG');
+        if (raw) localCached = JSON.parse(raw);
+      } catch {}
+
+      const savedAuto = localStorage.getItem('TOKEN_SPEED_TESTER_AUTO_REMEMBER');
+      if (savedAuto !== null && autoRememberConfig) {
+        autoRememberConfig.checked = savedAuto === 'true';
       }
+
+      const serverConfig = window.LOCAL_CONFIG || {};
+      // 融合配置：优先使用服务端的 config.yaml，并补充 localStorage 中的字段
+      const c = { ...localCached, ...serverConfig };
+
+      if (c.provider) document.getElementById('provider').value = c.provider;
+      if (c.apiKey) document.getElementById('apiKey').value = c.apiKey;
+      if (c.baseURL) document.getElementById('baseURL').value = c.baseURL;
+      if (c.model) document.getElementById('model').value = c.model;
+      if (c.maxTokens) document.getElementById('maxTokens').value = c.maxTokens;
+      if (c.runs) document.getElementById('runs').value = c.runs;
+      if (c.prompt) document.getElementById('prompt').value = c.prompt;
     });
   </script>
 </body>
